@@ -17,7 +17,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        go-version: ["1.21", "1.22", "1.23.10"]
+        go-version: ["1.23.10", "1.24.5", "1.25"]
 
     steps:
       - name: Checkout code
@@ -45,14 +45,40 @@ jobs:
       - name: Verify dependencies
         run: go mod verify
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install frontend dependencies
+        run: cd frontend && npm ci
+
+      - name: Build frontend
+        run: cd frontend && npm run build
+
+      - name: Copy frontend dist for embedding
+        if: matrix.os != 'windows-latest'
+        run: |
+          rm -rf web/frontend
+          mkdir -p web/frontend
+          cp -r frontend/dist web/frontend/
+
+      - name: Copy frontend dist for embedding (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          if (Test-Path web/frontend) { Remove-Item -Recurse -Force web/frontend }
+          New-Item -ItemType Directory -Force -Path web/frontend
+          Copy-Item -Recurse frontend/dist web/frontend/
+
       - name: Run unit tests (Windows)
         if: matrix.os == 'windows-latest'
         shell: pwsh
-        run: go test -v -race -timeout 5m '-coverprofile=coverage.out' -covermode=atomic '-run=^Test[^E]' ./...
+        run: go test -v -race -timeout 5m '-coverprofile=coverage.out' -covermode=atomic '-skip=E2E|Binary|MCPProtocol' ./...
 
       - name: Run unit tests (Unix)
         if: matrix.os != 'windows-latest'
-        run: go test -v -race -coverprofile=coverage.out -run "^Test[^E]" ./...
+        run: go test -v -race -coverprofile=coverage.out -skip "E2E|Binary|MCPProtocol" ./...
 
       - name: Generate coverage report (Windows)
         if: matrix.os == 'windows-latest'
@@ -97,10 +123,27 @@ jobs:
         with:
           go-version: "1.23.10"
 
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          version: latest
+          node-version: '20'
+
+      - name: Install frontend dependencies
+        run: cd frontend && npm ci
+
+      - name: Build frontend
+        run: cd frontend && npm run build
+
+      - name: Copy frontend dist for embedding
+        run: |
+          rm -rf web/frontend
+          mkdir -p web/frontend
+          cp -r frontend/dist web/frontend/
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.5.0
           args: --timeout=5m
 
   build:
@@ -122,6 +165,32 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: "1.23.10"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install frontend dependencies
+        run: cd frontend && npm ci
+
+      - name: Build frontend
+        run: cd frontend && npm run build
+
+      - name: Copy frontend dist for embedding (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          if (Test-Path web/frontend) { Remove-Item -Recurse -Force web/frontend }
+          New-Item -ItemType Directory -Force -Path web/frontend
+          Copy-Item -Recurse frontend/dist web/frontend/
+
+      - name: Copy frontend dist for embedding (Unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          rm -rf web/frontend
+          mkdir -p web/frontend
+          cp -r frontend/dist web/frontend/
 
       - name: Build (Windows)
         if: matrix.os == 'windows-latest'

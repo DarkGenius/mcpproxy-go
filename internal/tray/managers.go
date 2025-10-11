@@ -296,10 +296,9 @@ type MenuManager struct {
 	quarantineInfoEmpty   *systray.MenuItem            // "No servers" info item
 	quarantineInfoHelp    *systray.MenuItem            // "Click to unquarantine" help item
 
-	// State tracking to detect changes
-	lastServerNames     []string
-	lastQuarantineNames []string
-	menusInitialized    bool
+	// Latest server data snapshots
+	latestServers     []map[string]interface{}
+	latestQuarantined []map[string]interface{}
 
 	// Event handler callback
 	onServerAction func(serverName string, action string) // callback for server actions
@@ -330,6 +329,7 @@ func (m *MenuManager) SetActionCallback(callback func(serverName string, action 
 func (m *MenuManager) UpdateUpstreamServersMenu(servers []map[string]interface{}) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.latestServers = cloneServerData(servers)
 
 	// Stability check: Don't clear existing menus if we get empty servers and we already have servers
 	// This prevents UI flickering when database is temporarily unavailable
@@ -456,6 +456,7 @@ func (m *MenuManager) UpdateUpstreamServersMenu(servers []map[string]interface{}
 func (m *MenuManager) UpdateQuarantineMenu(quarantinedServers []map[string]interface{}) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.latestQuarantined = cloneServerData(quarantinedServers)
 
 	// Stability check: Don't clear existing quarantine menus if we get empty quarantine list
 	// but we already have quarantine items. This prevents UI flickering.
@@ -796,6 +797,7 @@ type SynchronizationManager struct {
 	stateManager *ServerStateManager
 	menuManager  *MenuManager
 	logger       *zap.SugaredLogger
+	onSync       func()
 
 	// Background sync control
 	ctx       context.Context
@@ -813,6 +815,11 @@ func NewSynchronizationManager(stateManager *ServerStateManager, menuManager *Me
 		ctx:          ctx,
 		cancel:       cancel,
 	}
+}
+
+// SetOnSync registers a callback invoked after successful menu synchronization.
+func (m *SynchronizationManager) SetOnSync(cb func()) {
+	m.onSync = cb
 }
 
 // Start begins background synchronization
@@ -907,6 +914,10 @@ func (m *SynchronizationManager) performSync() error {
 		m.menuManager.UpdateQuarantineMenu(quarantinedServers)
 	}
 
+	if m.onSync != nil {
+		m.onSync()
+	}
+
 	return nil
 }
 
@@ -958,3 +969,37 @@ func (m *SynchronizationManager) HandleServerEnable(serverName string, enabled b
 }
 
 // Note: stringSlicesEqual function is defined in tray.go
+
+func cloneServerData(list []map[string]interface{}) []map[string]interface{} {
+	if len(list) == 0 {
+		return nil
+	}
+
+	clone := make([]map[string]interface{}, 0, len(list))
+	for _, item := range list {
+		if item == nil {
+			clone = append(clone, nil)
+			continue
+		}
+		copied := make(map[string]interface{}, len(item))
+		for k, v := range item {
+			copied[k] = v
+		}
+		clone = append(clone, copied)
+	}
+	return clone
+}
+
+// LatestServersSnapshot returns a copy of the latest upstream server data used for menu generation.
+func (m *MenuManager) LatestServersSnapshot() []map[string]interface{} {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return cloneServerData(m.latestServers)
+}
+
+// LatestQuarantineSnapshot returns a copy of the latest quarantine data used for menu generation.
+func (m *MenuManager) LatestQuarantineSnapshot() []map[string]interface{} {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return cloneServerData(m.latestQuarantined)
+}

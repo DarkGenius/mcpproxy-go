@@ -46,6 +46,20 @@ jobs:
       - name: Verify dependencies
         run: go mod verify
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend
+        run: |
+          npm ci --prefix frontend
+          npm run build --prefix frontend
+          mkdir -p web/frontend
+          cp -r frontend/dist web/frontend/
+
       - name: Build mcpproxy binary for tests (Windows)
         if: matrix.os == 'windows-latest'
         env:
@@ -59,7 +73,10 @@ jobs:
         run: go build -tags nogui -o mcpproxy ./cmd/mcpproxy
 
       - name: Run unit tests
-        run: go test -v -race -timeout 30s ./internal/...
+        run: go test -v -race -timeout 30s -skip "Binary" ./internal/...
+
+      - name: Run Binary tests
+        run: go test -v -race -timeout 3m ./internal/server -run TestBinary
 
       - name: Run E2E tests
         run: go test -v -race -timeout 5m ./internal/server -run TestE2E
@@ -100,6 +117,20 @@ jobs:
         with:
           go-version: "1.23.10"
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend
+        run: |
+          npm ci --prefix frontend
+          npm run build --prefix frontend
+          mkdir -p web/frontend
+          cp -r frontend/dist web/frontend/
+
       - name: Build mcpproxy
         env:
           CGO_ENABLED: "0"
@@ -114,7 +145,7 @@ jobs:
           ./mcpproxy --help
 
           # Test logging functionality
-          timeout 10s ./mcpproxy serve --log-to-file --log-level debug --listen :0 --tray=false || true
+          timeout 10s ./mcpproxy serve --log-to-file --log-level debug --listen :0 || true
 
           # Verify log file was created in standard OS location
           if [ "$(uname)" = "Linux" ]; then
@@ -181,6 +212,20 @@ jobs:
         with:
           go-version: "1.23.10"
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend
+        run: |
+          npm ci --prefix frontend
+          npm run build --prefix frontend
+          mkdir -p web/frontend
+          cp -r frontend/dist web/frontend/
+
       - name: Run logging unit tests
         run: go test -v -race -timeout 2m ./internal/logs
 
@@ -207,7 +252,7 @@ jobs:
           echo "OS Standard: ${{ matrix.log_standard }}"
 
           # Run mcpproxy briefly to create log files
-          ./mcpproxy serve --log-to-file --log-level info --listen :0 --tray=false &
+          ./mcpproxy serve --log-to-file --log-level info --listen :0 &
           MCPPROXY_PID=$!
           sleep 5
           kill $MCPPROXY_PID 2>/dev/null || true
@@ -256,7 +301,7 @@ jobs:
 
           # Run mcpproxy briefly to create log files
           try {
-            $process = Start-Process -FilePath "./mcpproxy.exe" -ArgumentList "serve", "--log-to-file", "--log-level", "info", "--listen", ":0", "--tray=false" -NoNewWindow -PassThru
+            $process = Start-Process -FilePath "./mcpproxy.exe" -ArgumentList "serve", "--log-to-file", "--log-level", "info", "--listen", ":0" -NoNewWindow -PassThru
             Start-Sleep -Seconds 5
             $process | Stop-Process -Force -ErrorAction SilentlyContinue
           } catch {
@@ -326,6 +371,20 @@ jobs:
         uses: actions/setup-go@v4
         with:
           go-version: "1.23.10"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend
+        run: |
+          npm ci --prefix frontend
+          npm run build --prefix frontend
+          mkdir -p web/frontend
+          cp -r frontend/dist web/frontend/
 
       - name: Run concurrent stress tests
         run: |

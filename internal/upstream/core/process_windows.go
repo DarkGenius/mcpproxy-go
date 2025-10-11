@@ -17,7 +17,7 @@ type ProcessGroup struct {
 
 // createProcessGroupCommandFunc creates a custom CommandFunc for Windows systems
 // Note: Windows process group management is different from Unix and requires different approaches
-func createProcessGroupCommandFunc(workingDir string, logger *zap.Logger) func(ctx context.Context, command string, env []string, args []string) (*exec.Cmd, error) {
+func createProcessGroupCommandFunc(client *Client, workingDir string, logger *zap.Logger) func(ctx context.Context, command string, env []string, args []string) (*exec.Cmd, error) {
 	return func(ctx context.Context, command string, env []string, args []string) (*exec.Cmd, error) {
 		cmd := exec.CommandContext(ctx, command, args...)
 		cmd.Env = env
@@ -30,11 +30,15 @@ func createProcessGroupCommandFunc(workingDir string, logger *zap.Logger) func(c
 		// TODO: Implement Windows-specific process group management
 		// Windows uses Job Objects instead of process groups
 		// For now, we'll use the standard command creation
-		
+
 		logger.Debug("Process group configuration applied (Windows)",
 			zap.String("command", command),
 			zap.Strings("args", args),
 			zap.String("working_dir", workingDir))
+
+		if client != nil {
+			client.processCmd = cmd
+		}
 
 		return cmd, nil
 	}
@@ -46,11 +50,11 @@ func killProcessGroup(pgid int, logger *zap.Logger, serverName string) error {
 	// TODO: Implement proper Windows process termination
 	// For now, this is a placeholder that does nothing
 	// Windows process management would require Win32 API calls or Job Objects
-	
+
 	logger.Debug("Process group termination requested (Windows placeholder)",
 		zap.String("server", serverName),
 		zap.Int("pgid", pgid))
-	
+
 	return nil
 }
 
